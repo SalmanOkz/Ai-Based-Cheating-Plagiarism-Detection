@@ -1,0 +1,43 @@
+{
+  "frame_id": 413,
+  "timestamp": 89.05340194702148,
+  "datetime": "2026-01-07T18:29:28.927479",
+  "gaze_analysis": {
+    "status": "Looking Center",
+    "level": 0,
+    "h_ratio": 0.546,
+    "v_ratio": 0.455,
+    "head_pose": {
+      "head_rotation": 0.184,
+      "is_looking_down": false,
+      "eye_level": 0.55
+    }
+  },
+  "object_analysis": {
+    "person_count": 1,
+    "prohibited_items": [
+      {
+        "item": "cell phone",
+        "confidence": 0.7910941243171692
+      }
+    ],
+    "violations": [
+      "PROHIBITED_CELL PHONE"
+    ],
+    "level": 2,
+    "status": "CRITICAL",
+    "annotated_frame": "[[[253 238 237]\n  [252 235 236]\n  [253 234 238]\n  ...\n  [234 224 229]\n  [240 228 229]\n  [236 224 224]]\n\n [[250 234 235]\n  [251 235 237]\n  [250 233 237]\n  ...\n  [237 228 230]\n  [239 230 231]\n  [236 226 227]]\n\n [[251 234 240]\n  [252 235 240]\n  [252 235 239]\n  ...\n  [236 228 231]\n  [237 230 231]\n  [237 230 230]]\n\n ...\n\n [[149 152 190]\n  [149 151 191]\n  [149 151 192]\n  ...\n  [193 179 185]\n  [192 177 183]\n  [192 177 183]]\n\n [[148 150 189]\n  [148 150 190]\n  [148 150 191]\n  ...\n  [190 177 182]\n  [192 177 183]\n  [192 177 183]]\n\n [[150 150 191]\n  [150 148 189]\n  [152 149 191]\n  ...\n  [190 177 182]\n  [191 178 184]\n  [191 178 184]]]",
+    "detections": [
+      "Detection(class_id=0, class_name='person', confidence=0.9270316958427429, bbox=[24.7281494140625, 103.93327331542969, 616.6771240234375, 479.59759521484375], is_person=True, is_prohibited=False)",
+      "Detection(class_id=67, class_name='cell phone', confidence=0.7910941243171692, bbox=[237.37344360351562, 313.018310546875, 325.2413024902344, 473.46685791015625], is_person=False, is_prohibited=True)"
+    ]
+  },
+  "violations": [
+    "PROHIBITED_CELL PHONE"
+  ],
+  "risk_score": 5,
+  "is_cheating": true,
+  "alert_level": "CRITICAL",
+  "processing_time": 0,
+  "saved_image": "proctoring_results\\violations\\violation_20260107_182929_f000413.jpg"
+}

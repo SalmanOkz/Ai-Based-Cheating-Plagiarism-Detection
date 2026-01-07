@@ -1,0 +1,31 @@
+{
+  "frame_id": 475,
+  "timestamp": 99.22560524940491,
+  "datetime": "2026-01-07T18:29:39.099683",
+  "gaze_analysis": {
+    "status": "NO_FACE_DETECTED",
+    "level": 2,
+    "h_ratio": 0.5,
+    "v_ratio": 0.5
+  },
+  "object_analysis": {
+    "person_count": 0,
+    "prohibited_items": [],
+    "violations": [
+      "NO_PERSON"
+    ],
+    "level": 2,
+    "status": "CRITICAL",
+    "annotated_frame": "[[[17 15 13]\n  [16 15 14]\n  [15 15 15]\n  ...\n  [21 18 16]\n  [21 16 15]\n  [21 16 15]]\n\n [[14 15 12]\n  [16 16 13]\n  [16 14 12]\n  ...\n  [22 19 15]\n  [20 18 14]\n  [21 20 15]]\n\n [[16 15 10]\n  [16 15 11]\n  [16 14 12]\n  ...\n  [21 18 14]\n  [18 17 13]\n  [19 18 14]]\n\n ...\n\n [[14 14 14]\n  [13 13 13]\n  [13 13 13]\n  ...\n  [16 16 16]\n  [14 14 14]\n  [15 15 15]]\n\n [[14 14 14]\n  [13 13 13]\n  [13 13 13]\n  ...\n  [16 16 16]\n  [13 13 13]\n  [14 14 14]]\n\n [[13 13 13]\n  [13 13 13]\n  [13 13 13]\n  ...\n  [14 14 14]\n  [13 13 13]\n  [13 13 13]]]",
+    "detections": []
+  },
+  "violations": [
+    "GAZE: NO_FACE_DETECTED",
+    "NO_PERSON"
+  ],
+  "risk_score": 10,
+  "is_cheating": true,
+  "alert_level": "CRITICAL",
+  "processing_time": 0,
+  "saved_image": "proctoring_results\\violations\\violation_20260107_182939_f000475.jpg"
+}

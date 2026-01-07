@@ -1,0 +1,35 @@
+{
+  "frame_id": 522,
+  "timestamp": 106.12551665306091,
+  "datetime": "2026-01-07T18:29:45.999594",
+  "gaze_analysis": {
+    "status": "Looking Up",
+    "level": 1,
+    "h_ratio": 0.537,
+    "v_ratio": 0.238,
+    "head_pose": {
+      "head_rotation": 0.113,
+      "is_looking_down": false,
+      "eye_level": 0.532
+    }
+  },
+  "object_analysis": {
+    "person_count": 1,
+    "prohibited_items": [],
+    "violations": [],
+    "level": 0,
+    "status": "NORMAL",
+    "annotated_frame": "[[[235 234 239]\n  [237 235 241]\n  [238 235 242]\n  ...\n  [224 225 242]\n  [221 226 242]\n  [220 227 242]]\n\n [[236 235 240]\n  [236 235 240]\n  [234 233 238]\n  ...\n  [225 222 238]\n  [225 224 240]\n  [226 225 241]]\n\n [[241 237 242]\n  [242 239 243]\n  [238 235 240]\n  ...\n  [226 222 238]\n  [226 223 237]\n  [228 225 239]]\n\n ...\n\n [[138 149 191]\n  [139 152 193]\n  [137 151 191]\n  ...\n  [180 176 186]\n  [179 174 186]\n  [179 174 186]]\n\n [[136 149 191]\n  [138 152 194]\n  [138 152 194]\n  ...\n  [178 175 184]\n  [179 174 186]\n  [180 175 187]]\n\n [[135 148 190]\n  [137 151 191]\n  [138 152 192]\n  ...\n  [178 175 182]\n  [179 175 182]\n  [180 176 184]]]",
+    "detections": [
+      "Detection(class_id=0, class_name='person', confidence=0.9069358706474304, bbox=[22.97259521484375, 97.1466064453125, 619.3067626953125, 479.52227783203125], is_person=True, is_prohibited=False)"
+    ]
+  },
+  "violations": [
+    "GAZE: Looking Up"
+  ],
+  "risk_score": 3,
+  "is_cheating": true,
+  "alert_level": "WARNING",
+  "processing_time": 0,
+  "saved_image": "proctoring_results\\violations\\violation_20260107_182946_f000522.jpg"
+}
