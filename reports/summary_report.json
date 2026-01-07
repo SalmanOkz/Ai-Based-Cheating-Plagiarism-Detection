@@ -1,0 +1,12 @@
+{
+  "total_images": 108,
+  "normal": 46,
+  "warning": 20,
+  "alert": 16,
+  "critical": 26,
+  "with_prohibited_objects": 26,
+  "with_gaze_issues": 52,
+  "with_presence_issues": 0,
+  "normal_percentage": 42.592592592592595,
+  "suspicious_percentage": 57.407407407407405
+}
