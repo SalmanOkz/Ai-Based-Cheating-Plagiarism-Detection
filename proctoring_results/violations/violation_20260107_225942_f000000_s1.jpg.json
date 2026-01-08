@@ -1,0 +1,96 @@
+{
+  "frame_id": 0,
+  "timestamp": 17.985450506210327,
+  "datetime": "2026-01-07T22:59:27.738481",
+  "gaze_analysis": {
+    "status": "Looking Down (Head Pose)",
+    "level": 2,
+    "h_ratio": 0.514,
+    "v_ratio": 0.506,
+    "head_pose": {
+      "head_rotation": -0.052,
+      "is_looking_down": true,
+      "eye_level": 0.71
+    }
+  },
+  "object_analysis": {
+    "person_count": 1,
+    "tracked_students": 1,
+    "prohibited_items": [],
+    "suspicious_activities": [],
+    "risk_level": 0.0,
+    "status": "NORMAL",
+    "annotated_frame": "[[[163 161 168]\n  [161 162 165]\n  [161 166 165]\n  ...\n  [177 182 193]\n  [170 184 194]\n  [168 183 193]]\n\n [[159 163 165]\n  [161 163 165]\n  [163 162 165]\n  ...\n  [182 181 193]\n  [179 181 192]\n  [178 181 192]]\n\n [[163 163 163]\n  [163 162 165]\n  [163 162 167]\n  ...\n  [178 175 188]\n  [179 176 190]\n  [176 173 187]]\n\n ...\n\n [[179 178 183]\n  [179 178 183]\n  [179 178 183]\n  ...\n  [158 163 174]\n  [157 164 174]\n  [157 164 174]]\n\n [[180 179 184]\n  [179 178 182]\n  [179 179 181]\n  ...\n  [159 163 175]\n  [159 163 174]\n  [160 164 175]]\n\n [[182 181 183]\n  [179 178 182]\n  [179 178 183]\n  ...\n  [158 162 173]\n  [158 162 173]\n  [159 163 174]]]",
+    "detailed_analysis": {
+      "student_count": 1,
+      "tracked_students": 1,
+      "prohibited_items_count": 0,
+      "student_positions": [
+        {
+          "track_id": 1,
+          "bbox": [
+            73.44354248046875,
+            191.50714111328125,
+            533.8824462890625,
+            479.79693603515625
+          ],
+          "confidence": 0.8929033279418945,
+          "suspicious_actions": [],
+          "activity_score": 0.0
+        }
+      ],
+      "activity_timeline": [
+        {
+          "timestamp": 1767808782.199845,
+          "activity": "Student 1 entered the frame",
+          "tracked_students": 1
+        }
+      ],
+      "proximity_warnings": [],
+      "time_analysis": {}
+    },
+    "violation_count": 0,
+    "frame_timestamp": 1767808782.2112913
+  },
+  "student_analysis": {
+    "student_count": 1,
+    "tracked_students": 1,
+    "prohibited_items_count": 0,
+    "student_positions": [
+      {
+        "track_id": 1,
+        "bbox": [
+          73.44354248046875,
+          191.50714111328125,
+          533.8824462890625,
+          479.79693603515625
+        ],
+        "confidence": 0.8929033279418945,
+        "suspicious_actions": [],
+        "activity_score": 0.0
+      }
+    ],
+    "activity_timeline": [
+      {
+        "timestamp": 1767808782.199845,
+        "activity": "Student 1 entered the frame",
+        "tracked_students": 1
+      }
+    ],
+    "proximity_warnings": [],
+    "time_analysis": {}
+  },
+  "violations": [],
+  "suspicious_activities": [
+    "GAZE_CRITICAL: Looking Down (Head Pose)"
+  ],
+  "risk_score": 6,
+  "is_cheating": true,
+  "alert_level": "WARNING",
+  "processing_time": 0,
+  "student_count": 1,
+  "cheating_indicators": [
+    "suspicious_gaze"
+  ],
+  "saved_image": "proctoring_results\\violations\\violation_20260107_225942_f000000_s1.jpg"
+}

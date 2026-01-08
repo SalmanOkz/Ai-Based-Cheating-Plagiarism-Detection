@@ -1,79 +1,139 @@
 /**
- * Vision Guardian Frontend Logic
+ * Vision Guardian Frontend - With Debug Features
  */
 
-class VisionGuardianUI {
+class VisionGuardianFrontend {
     constructor() {
         this.isProctoring = false;
-        this.startTime = null;
+        this.violations = [];
+        this.lastResults = {};
         this.updateInterval = null;
-        this.statsInterval = null;
         
-        // Initialize
         this.initElements();
         this.initEventListeners();
-        this.initStatsUpdate();
+        this.checkConnection();
+        
+        // Start periodic updates
+        setInterval(() => {
+            if (this.isProctoring) {
+                this.getResults();
+            }
+            this.getSystemStatus();
+        }, 1000); // Update every second
     }
     
     initElements() {
-        // Buttons
+        // Status elements
+        this.statusDot = document.getElementById('statusDot');
+        this.statusText = document.getElementById('statusText');
+        
+        // Control buttons
         this.startBtn = document.getElementById('startBtn');
         this.stopBtn = document.getElementById('stopBtn');
         this.screenshotBtn = document.getElementById('screenshotBtn');
-        this.refreshLogBtn = document.getElementById('refreshLog');
+        this.refreshStatus = document.getElementById('refreshStatus');
         
-        // Counters
+        // Add debug button if not exists
+        if (!document.getElementById('debugBtn')) {
+            const debugBtn = document.createElement('button');
+            debugBtn.id = 'debugBtn';
+            debugBtn.className = 'btn btn-warning';
+            debugBtn.innerHTML = '<i class="fas fa-bug"></i> Debug';
+            document.querySelector('.video-controls').appendChild(debugBtn);
+        }
+        
+        this.debugBtn = document.getElementById('debugBtn');
+        
+        // Counters and displays
         this.fpsCounter = document.getElementById('fpsCounter');
         this.frameCounter = document.getElementById('frameCounter');
-        this.violationCounter = document.getElementById('violationCounter');
-        this.riskScore = document.getElementById('riskScore');
+        this.aiMode = document.getElementById('aiMode');
+        
+        // Risk assessment
         this.riskIndicator = document.getElementById('riskIndicator');
+        this.riskScore = document.getElementById('riskScore');
         this.riskStatus = document.getElementById('riskStatus');
         
-        // Status displays
-        this.gazeStatus = document.getElementById('gazeStatus');
+        // Detection displays
+        this.gazeText = document.getElementById('gazeText');
         this.gazeLevel = document.getElementById('gazeLevel');
-        this.personCount = document.getElementById('personCount');
-        this.presenceStatus = document.getElementById('presenceStatus');
-        this.itemsList = document.getElementById('itemsList');
+        this.studentCount = document.getElementById('studentCount');
+        this.studentStatus = document.getElementById('studentStatus');
         
         // System info
-        this.systemStatus = document.getElementById('systemStatus');
-        this.uptime = document.getElementById('uptime');
-        this.lastUpdate = document.getElementById('lastUpdate');
-        
-        // Alerts
-        this.alertBanner = document.getElementById('alertBanner');
-        this.alertText = document.getElementById('alertText');
-        this.statusIndicator = document.getElementById('statusIndicator');
-        this.statusDot = this.statusIndicator.querySelector('.status-dot');
-        this.statusText = this.statusIndicator.querySelector('.status-text');
-        
-        // Lists
-        this.violationsList = document.getElementById('violationsList');
+        this.aiStatus = document.getElementById('aiStatus');
+        this.cameraStatus = document.getElementById('cameraStatus');
+        this.totalFrames = document.getElementById('totalFrames');
         
         // Toast
         this.toast = document.getElementById('toast');
-        this.toastMessage = document.querySelector('.toast-message');
+        this.toastMessage = document.getElementById('toastMessage');
     }
     
     initEventListeners() {
-        // Start Proctoring
+        // Start proctoring
         this.startBtn.addEventListener('click', () => this.startProctoring());
         
-        // Stop Proctoring
+        // Stop proctoring
         this.stopBtn.addEventListener('click', () => this.stopProctoring());
         
-        // Take Screenshot
+        // Take screenshot
         this.screenshotBtn.addEventListener('click', () => this.takeScreenshot());
         
-        // Refresh Violation Log
-        this.refreshLogBtn.addEventListener('click', () => this.loadViolations());
+        // Refresh status
+        this.refreshStatus.addEventListener('click', () => this.getSystemStatus());
+        
+        // Debug button
+        this.debugBtn.addEventListener('click', () => this.debugDetection());
+        
+        // Help
+        document.getElementById('helpBtn').addEventListener('click', (e) => {
+            e.preventDefault();
+            this.showHelp();
+        });
+    }
+    
+    async checkConnection() {
+        try {
+            const response = await fetch('/api/test_ai');
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                this.updateConnectionStatus(true);
+                this.aiMode.textContent = data.ai_mode;
+                this.aiStatus.textContent = data.ai_mode;
+                this.showToast(`✅ Connected to ${data.ai_mode} backend`);
+                
+                // Show AI component status
+                if (data.modules) {
+                    console.log('AI Components:', data.modules);
+                }
+            } else {
+                this.aiMode.textContent = 'Simulation';
+                this.aiStatus.textContent = 'Simulation Mode';
+                this.showToast('⚠️ Running in simulation mode');
+            }
+        } catch (error) {
+            console.error('Connection check failed:', error);
+            this.aiMode.textContent = 'Offline';
+            this.aiStatus.textContent = 'Offline';
+            this.updateConnectionStatus(false);
+        }
+    }
+    
+    updateConnectionStatus(connected) {
+        if (connected) {
+            this.statusDot.className = 'status-dot connected';
+            this.statusText.textContent = 'Connected';
+        } else {
+            this.statusDot.className = 'status-dot';
+            this.statusText.textContent = 'Disconnected';
+        }
     }
     
     async startProctoring() {
         try {
-            const response = await fetch('/start_proctoring', {
+            const response = await fetch('/api/start_proctoring', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -84,34 +144,24 @@ class VisionGuardianUI {
             
             if (data.status === 'success') {
                 this.isProctoring = true;
-                this.startTime = new Date();
                 
-                // Update UI
                 this.startBtn.disabled = true;
                 this.stopBtn.disabled = false;
-                this.systemStatus.textContent = 'Active';
-                this.statusText.textContent = 'Proctoring';
-                this.statusDot.style.background = '#2a9d8f';
+                this.cameraStatus.textContent = 'Active';
                 
-                this.showToast('Proctoring session started');
-                
-                // Start updating stats more frequently
-                this.startStatsUpdate();
-                
-                // Start uptime counter
-                this.startUptimeCounter();
+                this.showToast(`Proctoring started (${data.ai_mode})`);
             } else {
-                this.showToast('Failed to start proctoring: ' + data.message, 'error');
+                this.showToast(`Failed to start: ${data.message}`);
             }
         } catch (error) {
             console.error('Error starting proctoring:', error);
-            this.showToast('Error starting proctoring', 'error');
+            this.showToast('Error starting proctoring');
         }
     }
     
     async stopProctoring() {
         try {
-            const response = await fetch('/stop_proctoring', {
+            const response = await fetch('/api/stop_proctoring', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -123,27 +173,25 @@ class VisionGuardianUI {
             if (data.status === 'success') {
                 this.isProctoring = false;
                 
-                // Update UI
                 this.startBtn.disabled = false;
                 this.stopBtn.disabled = true;
-                this.systemStatus.textContent = 'Ready';
-                this.statusText.textContent = 'Ready';
-                this.statusDot.style.background = '#6c757d';
+                this.cameraStatus.textContent = 'Inactive';
                 
-                this.showToast('Proctoring session stopped');
-                
-                // Stop stats update
-                this.stopStatsUpdate();
+                this.showToast('Proctoring stopped');
             }
         } catch (error) {
             console.error('Error stopping proctoring:', error);
-            this.showToast('Error stopping proctoring', 'error');
         }
     }
     
     async takeScreenshot() {
+        if (!this.isProctoring) {
+            this.showToast('Start proctoring first to take screenshots');
+            return;
+        }
+        
         try {
-            const response = await fetch('/take_screenshot', {
+            const response = await fetch('/api/take_screenshot', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -153,292 +201,229 @@ class VisionGuardianUI {
             const data = await response.json();
             
             if (data.status === 'success') {
-                this.showToast('Screenshot saved: ' + data.filename);
+                // Create download link
+                const link = document.createElement('a');
+                link.href = data.image;
+                link.download = data.filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                this.showToast(`Screenshot saved: ${data.filename}`);
             } else {
-                this.showToast('Failed to take screenshot: ' + data.message, 'error');
+                this.showToast(`Failed: ${data.message}`);
             }
         } catch (error) {
             console.error('Error taking screenshot:', error);
-            this.showToast('Error taking screenshot', 'error');
+            this.showToast('Error taking screenshot');
         }
     }
     
-    initStatsUpdate() {
-        // Update stats every 2 seconds initially
-        this.updateInterval = setInterval(() => {
-            if (!this.isProctoring) {
-                this.loadStats();
-            }
-        }, 2000);
-    }
-    
-    startStatsUpdate() {
-        // Clear initial interval
-        if (this.updateInterval) {
-            clearInterval(this.updateInterval);
-        }
-        
-        // Update more frequently when proctoring
-        this.statsInterval = setInterval(() => {
-            this.loadStats();
-            this.loadViolations();
-        }, 1000); // Update every second
-    }
-    
-    stopStatsUpdate() {
-        if (this.statsInterval) {
-            clearInterval(this.statsInterval);
-            this.statsInterval = null;
-        }
-        
-        // Restore slower updates
-        this.updateInterval = setInterval(() => {
-            this.loadStats();
-        }, 2000);
-    }
-    
-    async loadStats() {
+    async debugDetection() {
         try {
-            const response = await fetch('/get_stats');
+            const response = await fetch('/api/debug_detection');
             const data = await response.json();
             
-            // Update counters
-            this.fpsCounter.textContent = data.fps;
-            this.frameCounter.textContent = data.frame_count.toLocaleString();
-            this.violationCounter.textContent = data.violation_count.toLocaleString();
-            
-            // Update risk assessment
-            this.riskScore.textContent = data.risk_score;
-            this.updateRiskIndicator(data.risk_score);
-            this.updateRiskStatus(data.risk_score, data.is_cheating);
-            
-            // Update gaze tracking
-            this.updateGazeStatus(data.gaze_status, data.alert_level);
-            
-            // Update presence detection
-            this.personCount.textContent = data.person_count;
-            this.updatePresenceStatus(data.person_count);
-            
-            // Update prohibited items
-            this.updateProhibitedItems(data.prohibited_items);
-            
-            // Update alerts
-            this.updateAlertBanner(data.alert_level, data.is_cheating);
-            
-            // Update system status
-            this.lastUpdate.textContent = new Date().toLocaleTimeString();
-            
+            if (data.status === 'success') {
+                const debugInfo = `
+🔍 DEBUG INFORMATION:
+=====================
+Detections: ${data.detection_count}
+Persons: ${data.persons}
+Prohibited Items: ${data.prohibited}
+
+Detection Details:
+${JSON.stringify(data.detections, null, 2)}
+
+Check the console for more details.
+                `;
+                
+                console.log('Debug Detection Results:', data);
+                alert(debugInfo);
+                this.showToast('Debug info collected - check console');
+            } else {
+                this.showToast(`Debug failed: ${data.message}`);
+            }
         } catch (error) {
-            console.error('Error loading stats:', error);
+            console.error('Error debugging:', error);
+            this.showToast('Error debugging detection');
         }
     }
     
-    updateRiskIndicator(score) {
+    async getResults() {
+        try {
+            const response = await fetch('/api/get_results');
+            const data = await response.json();
+            
+            this.lastResults = data;
+            this.updateUI(data);
+            
+            // Log to console for debugging
+            if (data.detections && data.detections.length > 0) {
+                console.log(`Frame ${data.frame_count}: ${data.detections.length} detections`);
+            }
+            
+            return data;
+        } catch (error) {
+            console.error('Error getting results:', error);
+            return null;
+        }
+    }
+    
+    async getSystemStatus() {
+        try {
+            const response = await fetch('/api/get_system_status');
+            const data = await response.json();
+            
+            this.updateSystemInfo(data);
+            return data;
+        } catch (error) {
+            console.error('Error getting system status:', error);
+            return null;
+        }
+    }
+    
+    updateUI(results) {
+        // Update counters
+        if (results.fps) this.fpsCounter.textContent = results.fps;
+        if (results.frame_count) this.frameCounter.textContent = results.frame_count;
+        
+        // Update risk assessment
+        this.updateRiskAssessment(results.risk_score, results.alert_level, results.is_cheating);
+        
+        // Update gaze tracking
+        this.updateGazeTracking(results.gaze_status, results.gaze_level);
+        
+        // Update student detection
+        this.updateStudentDetection(results.person_count);
+        
+        // Update total frames
+        if (results.frames_processed) {
+            this.totalFrames.textContent = results.frames_processed;
+        }
+        
+        // Update AI mode
+        if (results.ai_mode) {
+            this.aiMode.textContent = results.ai_mode;
+            this.aiStatus.textContent = results.ai_mode;
+        }
+    }
+    
+    updateRiskAssessment(score, alertLevel, isCheating) {
+        this.riskScore.textContent = score;
+        
         // Move risk indicator (0-10 to 0-100%)
         const position = (score / 10) * 100;
         this.riskIndicator.style.left = `${position}%`;
         
-        // Update color based on score
-        if (score <= 3) {
-            this.riskIndicator.style.background = '#2a9d8f'; // Green
-        } else if (score <= 6) {
-            this.riskIndicator.style.background = '#ff9f1c'; // Orange
-        } else {
-            this.riskIndicator.style.background = '#e63946'; // Red
-        }
-    }
-    
-    updateRiskStatus(score, isCheating) {
-        if (isCheating) {
-            this.riskStatus.textContent = 'HIGH RISK - Cheating Detected';
-            this.riskStatus.style.background = '#e63946';
-            this.riskStatus.style.color = 'white';
-        } else if (score >= 6) {
-            this.riskStatus.textContent = 'Medium Risk';
-            this.riskStatus.style.background = '#ff9f1c';
+        // Update risk status
+        this.riskStatus.textContent = alertLevel;
+        
+        if (isCheating || alertLevel === 'CRITICAL') {
+            this.riskStatus.style.background = '#dc3545';
+        } else if (alertLevel === 'WARNING') {
+            this.riskStatus.style.background = '#ffc107';
             this.riskStatus.style.color = 'black';
-        } else if (score >= 3) {
-            this.riskStatus.textContent = 'Low Risk';
-            this.riskStatus.style.background = '#2a9d8f';
-            this.riskStatus.style.color = 'white';
         } else {
-            this.riskStatus.textContent = 'No Risk';
-            this.riskStatus.style.background = '#6c757d';
+            this.riskStatus.style.background = '#28a745';
             this.riskStatus.style.color = 'white';
         }
     }
     
-    updateGazeStatus(status, alertLevel) {
-        const gazeElement = this.gazeStatus.querySelector('span');
-        const icon = this.gazeStatus.querySelector('i');
-        
-        gazeElement.textContent = status;
-        
-        // Update level based on status
-        let level = 0;
-        if (status.includes('Looking Down')) {
-            level = 2;
-        } else if (status.includes('Looking') && !status.includes('Center')) {
-            level = 1;
-        }
-        
+    updateGazeTracking(status, level) {
+        this.gazeText.textContent = status;
         this.gazeLevel.textContent = level;
         
         // Update icon color
-        if (level === 2) {
-            icon.style.color = '#e63946'; // Red
-            this.gazeLevel.style.background = '#e63946';
-            this.gazeLevel.style.color = 'white';
-        } else if (level === 1) {
-            icon.style.color = '#ff9f1c'; // Orange
-            this.gazeLevel.style.background = '#ff9f1c';
-            this.gazeLevel.style.color = 'black';
+        const icon = this.gazeText.parentElement.querySelector('i');
+        if (level >= 2) {
+            icon.style.color = '#dc3545';
+        } else if (level >= 1) {
+            icon.style.color = '#ffc107';
         } else {
-            icon.style.color = '#2a9d8f'; // Green
-            this.gazeLevel.style.background = '#2a9d8f';
-            this.gazeLevel.style.color = 'white';
+            icon.style.color = '#28a745';
         }
     }
     
-    updatePresenceStatus(personCount) {
-        if (personCount === 0) {
-            this.presenceStatus.textContent = 'No Person';
-            this.presenceStatus.className = 'status-ok';
-            this.presenceStatus.style.color = '#e63946';
-        } else if (personCount === 1) {
-            this.presenceStatus.textContent = 'Normal';
-            this.presenceStatus.className = 'status-ok';
-            this.presenceStatus.style.color = '#2a9d8f';
-        } else {
-            this.presenceStatus.textContent = 'Multiple Persons';
-            this.presenceStatus.className = 'status-ok';
-            this.presenceStatus.style.color = '#e63946';
-        }
-    }
-    
-    updateProhibitedItems(items) {
-        this.itemsList.innerHTML = '';
+    updateStudentDetection(count) {
+        this.studentCount.textContent = count;
         
-        if (items && items.length > 0) {
-            items.forEach(item => {
-                const itemElement = document.createElement('div');
-                itemElement.className = 'item-tag';
-                itemElement.textContent = item;
-                this.itemsList.appendChild(itemElement);
-            });
+        if (count === 0) {
+            this.studentStatus.textContent = 'Status: No Student';
+            this.studentStatus.style.color = '#dc3545';
+        } else if (count === 1) {
+            this.studentStatus.textContent = 'Status: Normal';
+            this.studentStatus.style.color = '#28a745';
         } else {
-            const noItems = document.createElement('div');
-            noItems.className = 'no-items';
-            noItems.textContent = 'No prohibited items detected';
-            this.itemsList.appendChild(noItems);
+            this.studentStatus.textContent = `Status: ${count} Students`;
+            this.studentStatus.style.color = '#dc3545';
         }
     }
     
-    updateAlertBanner(alertLevel, isCheating) {
-        if (isCheating) {
-            this.alertBanner.style.display = 'flex';
-            this.alertText.textContent = `ALERT: ${alertLevel} Risk - Cheating Detected!`;
-            this.alertBanner.style.background = 'rgba(230, 57, 70, 0.9)';
-            
-            // Blink effect for critical alerts
-            if (alertLevel === 'CRITICAL') {
-                this.alertBanner.style.animation = 'pulse 1s infinite';
-            }
-        } else {
-            this.alertBanner.style.display = 'none';
-            this.alertBanner.style.animation = 'none';
-        }
-    }
-    
-    async loadViolations() {
-        try {
-            const response = await fetch('/get_violations');
-            const data = await response.json();
-            
-            this.updateViolationsList(data.violations);
-        } catch (error) {
-            console.error('Error loading violations:', error);
-        }
-    }
-    
-    updateViolationsList(violations) {
-        this.violationsList.innerHTML = '';
+    updateSystemInfo(status) {
+        this.aiStatus.textContent = status.ai_mode;
+        this.aiStatus.style.color = status.ai_available ? '#28a745' : '#ffc107';
         
-        if (violations && violations.length > 0) {
-            violations.forEach(violation => {
-                const violationItem = document.createElement('div');
-                violationItem.className = 'violation-item';
-                
-                violationItem.innerHTML = `
-                    <div>
-                        <div class="violation-type">${violation.type}</div>
-                        <div class="violation-time">${violation.timestamp}</div>
-                    </div>
-                    <div class="violation-risk">${violation.risk_score}/10</div>
-                `;
-                
-                this.violationsList.appendChild(violationItem);
-            });
-        } else {
-            const noViolations = document.createElement('div');
-            noViolations.className = 'no-violations';
-            noViolations.innerHTML = `
-                <i class="fas fa-check-circle"></i>
-                <p>No violations detected</p>
-            `;
-            this.violationsList.appendChild(noViolations);
-        }
-    }
-    
-    startUptimeCounter() {
-        if (this.uptimeInterval) {
-            clearInterval(this.uptimeInterval);
-        }
+        this.cameraStatus.textContent = status.camera_active ? 'Active' : 'Inactive';
+        this.cameraStatus.style.color = status.camera_active ? '#28a745' : '#dc3545';
         
-        this.uptimeInterval = setInterval(() => {
-            if (this.startTime) {
-                const now = new Date();
-                const diff = Math.floor((now - this.startTime) / 1000);
-                
-                const hours = Math.floor(diff / 3600);
-                const minutes = Math.floor((diff % 3600) / 60);
-                const seconds = diff % 60;
-                
-                this.uptime.textContent = 
-                    `${hours.toString().padStart(2, '0')}:` +
-                    `${minutes.toString().padStart(2, '0')}:` +
-                    `${seconds.toString().padStart(2, '0')}`;
-            }
-        }, 1000);
+        if (status.ai_available) {
+            this.aiMode.textContent = 'Real AI';
+        } else {
+            this.aiMode.textContent = 'Simulation';
+        }
     }
     
-    showToast(message, type = 'success') {
+    showToast(message) {
         this.toastMessage.textContent = message;
-        
-        // Update color based on type
-        if (type === 'error') {
-            this.toast.style.background = '#e63946';
-        } else if (type === 'warning') {
-            this.toast.style.background = '#ff9f1c';
-        } else {
-            this.toast.style.background = '#2a9d8f';
-        }
-        
-        // Show toast
         this.toast.classList.add('show');
         
-        // Hide after 3 seconds
         setTimeout(() => {
             this.toast.classList.remove('show');
         }, 3000);
+    }
+    
+    showHelp() {
+        const helpText = `
+Vision Guardian AI Proctoring System
+
+How to Use:
+1. Click "Start Proctoring" to begin AI analysis
+2. The system will analyze:
+   - Where the student is looking (Gaze Tracking)
+   - How many students are present
+   - If any prohibited items are visible (phones, books)
+3. Risk assessment updates in real-time
+4. Screenshots can be taken for evidence
+5. Use "Debug" button to check detection status
+
+AI Modes:
+- Real AI: Uses YOLO and MediaPipe models
+- Simulation: Uses simulated data for testing
+
+Status Colors:
+- Green: Normal activity
+- Yellow: Warning (suspicious activity)
+- Red: Critical (cheating detected)
+
+Debugging:
+- Check browser console for detection logs
+- Use Debug button to see detection details
+        `;
+        
+        alert(helpText);
     }
 }
 
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', () => {
-    const app = new VisionGuardianUI();
+    const app = new VisionGuardianFrontend();
     
-    // Initial load
-    app.loadStats();
-    app.loadViolations();
+    // Global reference for debugging
+    window.app = app;
+    
+    // Show welcome message
+    setTimeout(() => {
+        app.showToast('Vision Guardian AI Proctoring System Ready');
+    }, 1000);
 });

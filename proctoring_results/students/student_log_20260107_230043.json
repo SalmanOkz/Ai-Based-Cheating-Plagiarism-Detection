@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-01-07T23:00:42.623602",
+  "student_count": 1,
+  "violation_type": "cheating_attempt",
+  "indicators": [
+    "suspicious_gaze"
+  ],
+  "image_path": "proctoring_results\\violations\\violation_20260107_230043_f000000_s1.jpg",
+  "metadata_path": "proctoring_results\\violations\\violation_20260107_230043_f000000_s1.jpg.json"
+}

@@ -3,22 +3,252 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vision Guardian - AI Proctoring</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Vision Guardian - AI Proctoring System</title>
+    <link rel="stylesheet" href="/static/css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Basic styles for quick setup */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #ae9988 0%, #5c411f 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+            padding: 15px 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .logo i {
+            font-size: 2rem;
+            color: #4a6fa5;
+        }
+        
+        .logo h1 {
+            font-size: 1.5rem;
+            color: #2c3e50;
+        }
+        
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 15px;
+            background: #f8f9fa;
+            border-radius: 20px;
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #dc3545;
+        }
+        
+        .status-dot.connected {
+            background: #28a745;
+            animation: pulse 1s infinite;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+        
+        @media (max-width: 1200px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .video-container {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .video-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: #2c3e50;
+            color: white;
+        }
+        
+        .video-controls {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-info {
+            background: #17a2b8;
+            color: white;
+        }
+        
+        .btn-warning {
+            background: #ffc107;
+            color: black;
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .video-frame {
+            width: 100%;
+            height: 500px;
+            background: black;
+            overflow: hidden;
+        }
+        
+        #videoFeed {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        
+        .right-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .risk-meter {
+            position: relative;
+            height: 20px;
+            background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        .risk-indicator {
+            position: absolute;
+            top: -5px;
+            width: 30px;
+            height: 30px;
+            background: #2c3e50;
+            border-radius: 50%;
+            transform: translateX(-50%);
+            border: 3px solid white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+        }
+        
+        .risk-score {
+            font-size: 2.5rem;
+            font-weight: bold;
+            text-align: center;
+            margin: 10px 0;
+        }
+        
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+        
+        .detection-card {
+            padding: 15px;
+        }
+        
+        .footer {
+            background: white;
+            padding: 15px 30px;
+            border-radius: 10px;
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #28a745;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 5px;
+            display: none;
+        }
+        
+        .toast.show {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <!-- Header -->
         <header class="header">
             <div class="logo">
-                <i class="fas fa-eye"></i>
-                <h1>Vision Guardian</h1>
+                <i class="fas fa-robot"></i>
+                <h1>Vision Guardian AI Proctoring</h1>
             </div>
-            <div class="status-indicator" id="statusIndicator">
-                <span class="status-dot"></span>
-                <span class="status-text">Ready</span>
+            <div class="connection-status" id="connectionStatus">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Ready</span>
             </div>
         </header>
 
@@ -27,42 +257,38 @@
             <div class="left-panel">
                 <div class="video-container">
                     <div class="video-header">
-                        <h2><i class="fas fa-video"></i> Live Proctoring Feed</h2>
+                        <h2><i class="fas fa-video"></i> Live AI Analysis</h2>
                         <div class="video-controls">
-                            <button id="startBtn" class="btn btn-primary">
+                            <button id="startBtn" class="btn btn-success">
                                 <i class="fas fa-play"></i> Start
                             </button>
                             <button id="stopBtn" class="btn btn-danger" disabled>
                                 <i class="fas fa-stop"></i> Stop
                             </button>
-                            <button id="screenshotBtn" class="btn btn-secondary">
+                            <button id="screenshotBtn" class="btn btn-info">
                                 <i class="fas fa-camera"></i> Screenshot
                             </button>
                         </div>
                     </div>
                     
                     <div class="video-frame">
-                        <img id="videoFeed" src="{{ url_for('video_feed') }}" alt="Live Feed">
-                        <div class="video-overlay">
-                            <div class="alert-banner" id="alertBanner">
-                                <i class="fas fa-exclamation-triangle"></i>
-                                <span id="alertText">No alerts</span>
-                            </div>
-                        </div>
+                        <img id="videoFeed" src="/video_feed" alt="Live Feed">
                     </div>
                     
-                    <div class="video-info">
-                        <div class="info-item">
-                            <i class="fas fa-tachometer-alt"></i>
-                            <span>FPS: <span id="fpsCounter">0</span></span>
-                        </div>
-                        <div class="info-item">
-                            <i class="fas fa-film"></i>
-                            <span>Frames: <span id="frameCounter">0</span></span>
-                        </div>
-                        <div class="info-item">
-                            <i class="fas fa-exclamation-circle"></i>
-                            <span>Violations: <span id="violationCounter">0</span></span>
+                    <div style="padding: 15px; background: #f8f9fa; border-top: 1px solid #dee2e6;">
+                        <div style="display: flex; justify-content: space-around;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-tachometer-alt"></i>
+                                <span>FPS: <span id="fpsCounter">0</span></span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-film"></i>
+                                <span>Frame: <span id="frameCounter">0</span></span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-brain"></i>
+                                <span>AI: <span id="aiMode">Checking...</span></span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -70,105 +296,84 @@
 
             <!-- Right Panel - Analytics -->
             <div class="right-panel">
-                <!-- Risk Score Card -->
-                <div class="card risk-card">
-                    <h3><i class="fas fa-chart-line"></i> Risk Assessment</h3>
+                <!-- Risk Assessment -->
+                <div class="card">
+                    <h3 style="margin-bottom: 15px; color: #2c3e50;">
+                        <i class="fas fa-chart-line"></i> Risk Assessment
+                    </h3>
                     <div class="risk-meter">
-                        <div class="risk-scale">
-                            <div class="risk-level low">Low</div>
-                            <div class="risk-level medium">Medium</div>
-                            <div class="risk-level high">High</div>
+                        <div style="display: flex; justify-content: space-between; position: absolute; width: 100%; top: -25px;">
+                            <div>Low</div>
+                            <div>Medium</div>
+                            <div>High</div>
                         </div>
-                        <div class="risk-indicator" id="riskIndicator"></div>
+                        <div class="risk-indicator" id="riskIndicator" style="left: 0%;"></div>
                     </div>
                     <div class="risk-score">
                         <span id="riskScore">0</span>/10
                     </div>
-                    <div class="risk-status" id="riskStatus">No Risk Detected</div>
+                    <div id="riskStatus" style="text-align: center; padding: 8px 15px; border-radius: 20px; background: #28a745; color: white;">
+                        No Risk
+                    </div>
                 </div>
 
                 <!-- Detection Cards -->
                 <div class="cards-grid">
                     <div class="card detection-card">
-                        <div class="card-header">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
                             <i class="fas fa-eye"></i>
                             <h4>Gaze Tracking</h4>
                         </div>
-                        <div class="card-content">
-                            <div class="detection-status" id="gazeStatus">
-                                <i class="fas fa-check-circle"></i>
-                                <span>Looking Center</span>
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;">
+                                <i class="fas fa-check-circle" style="color: #28a745;"></i>
+                                <span id="gazeText">Looking Center</span>
                             </div>
-                            <div class="detection-level">
-                                <span class="level-label">Level:</span>
-                                <span class="level-value" id="gazeLevel">0</span>
+                            <div style="font-size: 0.9rem;">
+                                Level: <span id="gazeLevel">0</span>
                             </div>
                         </div>
                     </div>
 
                     <div class="card detection-card">
-                        <div class="card-header">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
                             <i class="fas fa-user-friends"></i>
-                            <h4>Presence Detection</h4>
+                            <h4>Student Detection</h4>
                         </div>
-                        <div class="card-content">
-                            <div class="detection-status">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;">
                                 <i class="fas fa-user"></i>
-                                <span>Persons: <span id="personCount">0</span></span>
+                                <span>Count: <span id="studentCount">0</span></span>
                             </div>
-                            <div class="detection-status">
-                                <span class="status-ok" id="presenceStatus">Normal</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card detection-card">
-                        <div class="card-header">
-                            <i class="fas fa-ban"></i>
-                            <h4>Prohibited Items</h4>
-                        </div>
-                        <div class="card-content">
-                            <div class="items-list" id="itemsList">
-                                <div class="no-items">No prohibited items detected</div>
+                            <div id="studentStatus" style="font-size: 0.9rem; color: #28a745;">
+                                Status: Normal
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Violation Log -->
-                <div class="card violations-card">
-                    <div class="card-header">
-                        <i class="fas fa-clipboard-list"></i>
-                        <h4>Violation Log</h4>
-                        <button id="refreshLog" class="btn-icon">
+                <!-- System Information -->
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 style="color: #2c3e50;">
+                            <i class="fas fa-info-circle"></i> System Info
+                        </h3>
+                        <button id="refreshStatus" style="background: none; border: none; cursor: pointer;">
                             <i class="fas fa-sync-alt"></i>
                         </button>
                     </div>
-                    <div class="card-content">
-                        <div class="violations-list" id="violationsList">
-                            <div class="no-violations">
-                                <i class="fas fa-check-circle"></i>
-                                <p>No violations detected</p>
-                            </div>
+                    <div>
+                        <div style="display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #dee2e6;">
+                            <span>AI Mode:</span>
+                            <span id="aiStatus">Checking...</span>
                         </div>
-                    </div>
-                </div>
-
-                <!-- System Info -->
-                <div class="card system-card">
-                    <h3><i class="fas fa-info-circle"></i> System Information</h3>
-                    <div class="system-info">
-                        <div class="info-row">
-                            <span class="info-label">Status:</span>
-                            <span class="info-value" id="systemStatus">Ready</span>
+                        <div style="display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #dee2e6;">
+                            <span>Camera:</span>
+                            <span id="cameraStatus">Inactive</span>
                         </div>
-                        <div class="info-row">
-                            <span class="info-label">Uptime:</span>
-                            <span class="info-value" id="uptime">00:00:00</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="info-label">Last Update:</span>
-                            <span class="info-value" id="lastUpdate">--:--:--</span>
+                        <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+                            <span>Frames:</span>
+                            <span id="totalFrames">0</span>
                         </div>
                     </div>
                 </div>
@@ -177,25 +382,23 @@
 
         <!-- Footer -->
         <footer class="footer">
-            <div class="footer-content">
-                <p>© 2024 Vision Guardian - AI Proctoring System</p>
-                <div class="footer-links">
-                    <a href="#"><i class="fas fa-cog"></i> Settings</a>
-                    <a href="#"><i class="fas fa-question-circle"></i> Help</a>
-                    <a href="#"><i class="fas fa-download"></i> Export Logs</a>
-                </div>
+            <p>© 2024 Vision Guardian - AI Proctoring System</p>
+            <div style="margin-top: 10px;">
+                <a href="#" id="helpBtn" style="color: #4a6fa5; text-decoration: none; margin: 0 10px;">
+                    <i class="fas fa-question-circle"></i> Help
+                </a>
             </div>
         </footer>
     </div>
 
     <!-- Toast Notification -->
     <div id="toast" class="toast">
-        <div class="toast-content">
+        <div style="display: flex; align-items: center; gap: 10px;">
             <i class="fas fa-check-circle"></i>
-            <span class="toast-message"></span>
+            <span id="toastMessage">Message</span>
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    <script src="/static/js/script.js"></script>
 </body>
 </html>
