@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 
 from config import AI_CONFIG, INTEGRITY_CONFIG, BASE_DIR
-from untils.logging_utils import get_logger
+from utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
 

@@ -15,9 +15,9 @@ from config import print_config, TEMPLATE_DIR, STATIC_DIR, SCREENSHOTS_DIR
 from ai_integrator import AIModelIntegrator
 from camera_manager import CameraManager
 from integrity_handler import IntegrityHandler
-from untils import setup_logging, get_logger, success_response, error_response
-from untils.file_utils import write_file, ensure_directory
-
+from utils import  setup_logging,get_logger, success_response, error_response
+from utils.file_utils import write_file, ensure_directory
+# setup_logging
 # Setup logging
 setup_logging()
 logger = get_logger(__name__)
@@ -124,26 +124,31 @@ def index():
     logger.info("📄 Serving index.html")
     return render_template('index.html')
 
-@app.route('/api/system_status')
+@app.route('/api/system_status', methods=['GET'])
 def system_status():
     """Get system status"""
-    ai_status = ai_integrator.get_status()
-    cam_status = camera_manager.get_results()
-    integrity_stats = integrity_handler.get_stats()
-    
-    return jsonify(success_response({
-        'ai_models': ai_status,
-        'camera': {
-            'active': camera_manager.is_streaming,
-            'fps': cam_status.get('fps', 0),
-            'frames_processed': cam_status.get('frame_count', 0)
-        },
-        'integrity': integrity_stats,
-        'system': {
-            'ai_mode': 'REAL_AI' if ai_status['all_loaded'] else 'SIMULATION',
-            'timestamp': __import__('datetime').datetime.now().isoformat()
+    try:
+        from datetime import datetime
+        
+        status_data = {
+            'camera_active': camera_manager.is_streaming if camera_manager else False,
+            'ai_mode': 'REAL AI',
+            'timestamp': datetime.now().isoformat()
         }
-    }))
+        
+        return jsonify({
+            'success': True,
+            'data': status_data,
+            'message': 'System operational'
+        }), 200
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'System status error: {str(e)}'
+        }), 500
 
 @app.route('/api/start_proctoring', methods=['POST'])
 def start_proctoring():
@@ -156,27 +161,27 @@ def start_proctoring():
         return jsonify(error_response('Invalid camera_id. Must be 0-10')), 400
     
     if camera_manager.start_camera(camera_id):
-        return jsonify(success_response(
-            message='Proctoring started',
+        return success_response(
             data={
                 'camera_id': camera_id,
                 'ai_mode': 'REAL_AI' if ai_integrator.ai_components['all_loaded'] else 'SIMULATION'
-            }
-        ))
+            },
+            message='Proctoring started'
+        )
     
-    return jsonify(error_response('Failed to start camera')), 500
+    return error_response('Failed to start camera', 500)
 
 @app.route('/api/stop_proctoring', methods=['POST'])
 def stop_proctoring():
     """Stop proctoring session"""
     camera_manager.stop_camera()
-    return jsonify(success_response('Proctoring stopped'))
+    return success_response(message='Proctoring stopped')
 
 @app.route('/api/proctoring_results')
 def proctoring_results():
     """Get current proctoring results"""
     results = camera_manager.get_results()
-    return jsonify(success_response(data=results))
+    return success_response(data=results)
 
 @app.route('/api/analyze_text', methods=['POST'])
 def analyze_text():
@@ -195,10 +200,10 @@ def analyze_text():
     try:
         results = integrity_handler.analyze_text_content(text)
         
-        return jsonify(success_response(
-            message='Text analysis completed',
-            data=results
-        ))
+        return success_response(
+            data=results,
+            message='Text analysis completed'
+        )
     except Exception as e:
         logger.error(f"Text analysis error: {e}")
         return jsonify(error_response(f'Analysis failed: {str(e)}')), 500

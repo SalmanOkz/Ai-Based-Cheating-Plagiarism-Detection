@@ -7,8 +7,8 @@ from typing import Dict, List
 from datetime import datetime
 
 from config import REPORTS_DIR
-from untils.logging_utils import get_logger
-from untils.file_utils import save_json, read_file, write_file
+from utils.logging_utils import get_logger
+from utils.file_utils import save_json, read_file, write_file
 
 logger = get_logger(__name__)
 

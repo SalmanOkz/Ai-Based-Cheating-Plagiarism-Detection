@@ -11,8 +11,8 @@ from typing import Optional, Tuple, Dict, List, Any
 from queue import Queue, Empty
 
 from config import AI_CONFIG
-from untils.logging_utils import get_logger
-from untils.risk_calculator import calculate_from_results
+from utils.logging_utils import get_logger
+from utils.risk_calculator import calculate_from_results
 
 logger = get_logger(__name__)
 
@@ -68,9 +68,10 @@ class CameraManager:
             if self.is_streaming:
                 logger.warning("Camera already running, stopping first...")
                 self._stop_camera_unsafe()
+
+            # Try to open camera (Windows DirectShow backend)
+            self.camera = cv2.VideoCapture(camera_id, cv2.CAP_DSHOW)
             
-            # Try to open camera
-            self.camera = cv2.VideoCapture(camera_id)
             if not self.camera.isOpened():
                 # Try other camera IDs
                 for cam_id in [1, 2, 3]:
@@ -84,10 +85,15 @@ class CameraManager:
                 return False
             
             # Set camera properties
+           # Set camera properties (Windows optimization)
             self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
             self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
             self.camera.set(cv2.CAP_PROP_FPS, 30)
-            self.camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize buffer lag
+            self.camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            
+            # Warm up camera (flush initial frames)
+            for _ in range(5):
+                self.camera.read()# Minimize buffer lag
             
             # Test camera
             ret, test_frame = self.camera.read()

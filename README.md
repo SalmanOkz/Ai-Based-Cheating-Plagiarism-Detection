@@ -176,7 +176,7 @@ texts, labels = dm.load_hc3_dataset(sample_size=1000)
 
 ### All Critical Issues Fixed ✅
 
-1. ✅ Import typo (`untils` → `utils`)
+1. ✅ Import typo (`utils` → `utils`)
 2. ✅ Duplicate application in index.html
 3. ✅ Thread safety in camera manager
 4. ✅ No dummy data - real errors reported
