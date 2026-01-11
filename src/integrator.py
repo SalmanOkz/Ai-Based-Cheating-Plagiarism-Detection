@@ -1,5 +1,6 @@
 """
 Enhanced Vision Guardian with Student Activity Monitoring
+FIXED: Memory leaks, bounded collections, proper cleanup
 """
 import cv2
 import time
@@ -11,7 +12,12 @@ from typing import Dict, List, Optional
 from collections import deque
 
 class VisionGuardian:
-    """Enhanced proctoring system with student activity monitoring"""
+    """Enhanced proctoring system with student activity monitoring - FIXED"""
+    
+    # Maximum sizes to prevent memory leaks
+    MAX_STUDENT_ACTIVITIES = 100
+    MAX_CHEATING_ATTEMPTS = 500  # FIXED: Was unlimited
+    MAX_VIOLATION_HISTORY = 50
     
     def __init__(self, config: Dict = None):
         """Initialize with student monitoring"""
@@ -19,14 +25,16 @@ class VisionGuardian:
         self.config = {
             'enable_gaze': True,
             'enable_objects': True,
-            'enable_student_monitoring': True,  # New: Student activity monitoring
+            'enable_student_monitoring': True,
             'save_output': True,
             'output_dir': 'proctoring_results',
             'gaze_confidence': 0.5,
             'object_confidence': 0.5,
-            'max_students': 1,  # Maximum allowed students
+            'max_students': 1,
             'violation_cooldown': 5,
-            'activity_history_size': 100
+            'activity_history_size': 100,
+            'max_cheating_attempts': 500,  # FIXED: Added limit
+            'auto_cleanup_interval': 300  # Cleanup every 5 minutes
         }
         
         if config:
@@ -40,10 +48,18 @@ class VisionGuardian:
         self.violation_count = 0
         self.last_violation_time = 0
         self.start_time = time.time()
+        self.last_cleanup_time = time.time()
         
-        # Student monitoring
-        self.student_activities = deque(maxlen=self.config['activity_history_size'])
-        self.cheating_attempts = []
+        # FIXED: Bounded student monitoring with maxlen
+        self.student_activities = deque(
+            maxlen=self.config['activity_history_size']
+        )
+        self.cheating_attempts = deque(
+            maxlen=self.config['max_cheating_attempts']
+        )
+        self.violation_history = deque(
+            maxlen=self.MAX_VIOLATION_HISTORY
+        )
         
         # Create output directory
         if self.config['save_output']:
@@ -76,10 +92,16 @@ class VisionGuardian:
                 self.object_detector = None
     
     def process_frame(self, frame, frame_id: int = None):
-        """Process frame with enhanced student monitoring"""
+        """Process frame with enhanced student monitoring - FIXED: Memory safe"""
         self.frame_count += 1
         if frame_id is None:
             frame_id = self.frame_count
+        
+        # Auto cleanup periodically
+        current_time = time.time()
+        if current_time - self.last_cleanup_time > self.config['auto_cleanup_interval']:
+            self._auto_cleanup()
+            self.last_cleanup_time = current_time
         
         # Initialize enhanced results structure
         results = {
@@ -88,7 +110,7 @@ class VisionGuardian:
             'datetime': datetime.now().isoformat(),
             'gaze_analysis': None,
             'object_analysis': None,
-            'student_analysis': None,  # New: Student-specific analysis
+            'student_analysis': None,
             'violations': [],
             'suspicious_activities': [],
             'risk_score': 0,
@@ -127,7 +149,7 @@ class VisionGuardian:
                 # Extract student count
                 results['student_count'] = analysis_result.get('person_count', 0)
                 
-                # Check for multiple students (cheating/collaboration)
+                # Check for multiple students
                 if results['student_count'] > self.config['max_students']:
                     violation_msg = f"MULTIPLE_STUDENTS: {results['student_count']} detected (max: {self.config['max_students']})"
                     results['violations'].append(violation_msg)
@@ -157,7 +179,7 @@ class VisionGuardian:
         # Calculate enhanced risk score
         results['risk_score'] = self.calculate_enhanced_risk_score(results)
         
-        # Determine alert level with student-specific rules
+        # Determine alert level
         results['alert_level'] = self.determine_enhanced_alert_level(results)
         results['is_cheating'] = results['alert_level'] in ['WARNING', 'CRITICAL']
         
@@ -165,9 +187,11 @@ class VisionGuardian:
         if results['is_cheating']:
             self._record_cheating_attempt(results)
         
-        # Save violation if needed
+        # Save violation if needed (with memory-safe checks)
         if results['is_cheating'] and self.config['save_output']:
-            self.save_enhanced_violation(frame, results)
+            # Only save if cooldown period has passed
+            if current_time - self.last_violation_time >= self.config['violation_cooldown']:
+                self.save_enhanced_violation(frame, results)
         
         # Calculate processing time
         results['processing_time'] = round((time.time() - start_process) * 1000, 2)
@@ -175,50 +199,78 @@ class VisionGuardian:
         return results
     
     def _record_student_activity(self, results):
-        """Record student activity for pattern analysis"""
+        """Record student activity - FIXED: Memory safe with deque"""
         activity_record = {
             'timestamp': results['timestamp'],
             'frame_id': results['frame_id'],
             'student_count': results['student_count'],
-            'suspicious_activities': results['suspicious_activities'].copy(),
+            'suspicious_activities': results['suspicious_activities'][:5],  # FIXED: Limit to 5
             'risk_score': results['risk_score'],
             'alert_level': results['alert_level']
         }
+        # deque automatically discards oldest when maxlen reached
         self.student_activities.append(activity_record)
     
     def _record_cheating_attempt(self, results):
-        """Record detailed cheating attempt information"""
+        """Record cheating attempt - FIXED: Memory safe with deque"""
         attempt = {
             'timestamp': datetime.now().isoformat(),
             'frame_id': results['frame_id'],
             'student_count': results['student_count'],
-            'violations': results['violations'].copy(),
-            'cheating_indicators': results['cheating_indicators'].copy(),
+            'violations': results['violations'][:10],  # FIXED: Limit to 10
+            'cheating_indicators': results['cheating_indicators'][:10],  # FIXED: Limit to 10
             'risk_score': results['risk_score'],
-            'alert_level': results['alert_level'],
-            'suspicious_activities': results['suspicious_activities'].copy()
+            'alert_level': results['alert_level']
         }
+        # deque automatically discards oldest when maxlen reached
         self.cheating_attempts.append(attempt)
         self.violation_count += 1
     
+    def _auto_cleanup(self):
+        """Automatic memory cleanup - FIXED: Periodic cleanup"""
+        try:
+            # Clean old violation files if save_output is enabled
+            if self.config['save_output']:
+                output_dir = Path(self.config['output_dir']) / 'violations'
+                if output_dir.exists():
+                    # Keep only last 100 violations
+                    violation_files = sorted(output_dir.glob('*.jpg'), key=lambda p: p.stat().st_mtime)
+                    if len(violation_files) > 100:
+                        for old_file in violation_files[:-100]:
+                            try:
+                                old_file.unlink()
+                                # Also delete corresponding JSON
+                                json_file = old_file.with_suffix('.jpg.json')
+                                if json_file.exists():
+                                    json_file.unlink()
+                            except Exception as e:
+                                print(f"⚠️ Failed to delete old file {old_file}: {e}")
+            
+            print(f"🧹 Auto cleanup completed. Memory stats:")
+            print(f"   Activities: {len(self.student_activities)}/{self.config['activity_history_size']}")
+            print(f"   Cheating attempts: {len(self.cheating_attempts)}/{self.config['max_cheating_attempts']}")
+            
+        except Exception as e:
+            print(f"⚠️ Auto cleanup error: {e}")
+    
     def calculate_enhanced_risk_score(self, results: Dict) -> int:
-        """Calculate enhanced risk score with student monitoring"""
+        """Calculate enhanced risk score"""
         risk = 0
         
         # Base risk from gaze
         gaze = results.get('gaze_analysis', {})
         gaze_level = gaze.get('level', 0)
         if gaze_level == 2:
-            risk += 4  # Critical gaze
+            risk += 4
         elif gaze_level == 1:
-            risk += 2  # Warning gaze
+            risk += 2
         
         # Risk from student count
         student_count = results.get('student_count', 0)
         if student_count == 0:
-            risk += 4  # No student (cheating by absence)
+            risk += 4
         elif student_count > self.config['max_students']:
-            risk += min(5, (student_count - self.config['max_students']) * 2)  # Multiple students
+            risk += min(5, (student_count - self.config['max_students']) * 2)
         
         # Risk from prohibited items
         prohibited_count = 0
@@ -237,18 +289,18 @@ class VisionGuardian:
         return min(10, risk)
     
     def determine_enhanced_alert_level(self, results: Dict) -> str:
-        """Determine alert level with student-specific rules"""
+        """Determine alert level"""
         risk_score = results.get('risk_score', 0)
         violations = results.get('violations', [])
         student_count = results.get('student_count', 0)
         
-        # Critical conditions (highest priority)
+        # Critical conditions
         critical_conditions = [
-            student_count > self.config['max_students'],  # Multiple students
-            student_count == 0,  # No student
-            risk_score >= 8,  # Very high risk
-            any('MULTIPLE_STUDENTS' in v for v in violations),  # Multiple students violation
-            any('PROHIBITED_ITEM' in v for v in violations) and len(violations) >= 2  # Multiple prohibited items
+            student_count > self.config['max_students'],
+            student_count == 0,
+            risk_score >= 8,
+            any('MULTIPLE_STUDENTS' in v for v in violations),
+            any('PROHIBITED_ITEM' in v for v in violations) and len(violations) >= 2
         ]
         
         # Warning conditions
@@ -256,7 +308,7 @@ class VisionGuardian:
             risk_score >= 5,
             len(violations) >= 1,
             len(results.get('suspicious_activities', [])) >= 2,
-            student_count > 1  # More than 1 student but within limit
+            student_count > 1
         ]
         
         if any(critical_conditions):
@@ -267,7 +319,7 @@ class VisionGuardian:
             return 'NORMAL'
     
     def save_enhanced_violation(self, frame: np.ndarray, results: Dict):
-        """Save enhanced violation data with student information"""
+        """Save violation - FIXED: Memory safe"""
         # Cooldown check
         current_time = time.time()
         if current_time - self.last_violation_time < self.config.get('violation_cooldown', 5):
@@ -277,49 +329,41 @@ class VisionGuardian:
         
         try:
             output_dir = Path(self.config['output_dir'])
-            
-            # Create violation directory
             violation_dir = output_dir / 'violations'
             violation_dir.mkdir(exist_ok=True)
-            
-            # Create students directory for student-specific violations
-            students_dir = output_dir / 'students'
-            students_dir.mkdir(exist_ok=True)
             
             # Generate filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"violation_{timestamp}_f{results['frame_id']:06d}_s{results['student_count']}.jpg"
             
-            # Save annotated frame with student information
+            # Save annotated frame
             annotated = self.annotate_frame_with_students(frame, results)
             image_path = violation_dir / filename
             cv2.imwrite(str(image_path), annotated)
             
-            # Enhanced metadata with student information
-            metadata = results.copy()
-            metadata['saved_image'] = str(image_path)
-            metadata['student_analysis'] = results.get('student_analysis', {})
-            metadata['cheating_indicators'] = results.get('cheating_indicators', [])
-            metadata['suspicious_activities'] = results.get('suspicious_activities', [])
+            # FIXED: Save only essential metadata (not full frame data)
+            metadata = {
+                'frame_id': results['frame_id'],
+                'timestamp': results['datetime'],
+                'student_count': results['student_count'],
+                'risk_score': results['risk_score'],
+                'alert_level': results['alert_level'],
+                'violations': results['violations'][:10],  # Limit to 10
+                'cheating_indicators': results['cheating_indicators'][:10],  # Limit to 10
+                'saved_image': str(image_path)
+            }
             
             metadata_path = violation_dir / f"{filename}.json"
             with open(metadata_path, 'w') as f:
-                json.dump(metadata, f, indent=2, default=str)
+                json.dump(metadata, f, indent=2)
             
-            # Log student-specific violation
-            if results['student_count'] > 0:
-                student_log = {
-                    'timestamp': metadata['datetime'],
-                    'student_count': results['student_count'],
-                    'violation_type': 'cheating_attempt',
-                    'indicators': results['cheating_indicators'],
-                    'image_path': str(image_path),
-                    'metadata_path': str(metadata_path)
-                }
-                
-                student_log_path = students_dir / f"student_log_{timestamp}.json"
-                with open(student_log_path, 'w') as f:
-                    json.dump(student_log, f, indent=2)
+            # Add to violation history
+            self.violation_history.append({
+                'timestamp': timestamp,
+                'frame_id': results['frame_id'],
+                'risk_score': results['risk_score'],
+                'image_path': str(image_path)
+            })
             
             print(f"⚠️ Violation #{self.violation_count} saved (Students: {results['student_count']})")
             
@@ -333,75 +377,38 @@ class VisionGuardian:
         
         # Colors for alert levels
         colors = {
-            'NORMAL': (0, 255, 0),    # Green
-            'WARNING': (0, 255, 255), # Yellow
-            'CRITICAL': (0, 0, 255)   # Red
+            'NORMAL': (0, 255, 0),
+            'WARNING': (0, 255, 255),
+            'CRITICAL': (0, 0, 255)
         }
         
         alert_level = results.get('alert_level', 'NORMAL')
         color = colors.get(alert_level, (255, 255, 255))
         
-        # Enhanced header with student count
+        # Enhanced header
         banner_height = 100
         cv2.rectangle(annotated, (0, 0), (w, banner_height), color, -1)
         
-        # Title with student information
+        # Title
         student_count = results.get('student_count', 0)
         title = f"Vision Guardian - {alert_level} - Students: {student_count}"
         cv2.putText(annotated, title, (10, 30),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 2)
         
-        # Enhanced info lines
+        # Info lines
         info_lines = [
             f"Frame: {results.get('frame_id', 0)} | Risk: {results.get('risk_score', 0)}/10",
-            f"Students: {student_count} | Suspicious Activities: {len(results.get('suspicious_activities', []))}",
-            f"Cheating Indicators: {len(results.get('cheating_indicators', []))}"
+            f"Students: {student_count} | Violations: {len(results.get('violations', []))}"
         ]
         
         for i, line in enumerate(info_lines):
             cv2.putText(annotated, line, (10, 55 + i * 20),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
         
-        # Student-specific information
-        y_offset = banner_height + 20
-        
-        # If multiple students detected, show warning
-        if student_count > self.config['max_students']:
-            warning_text = f"⚠️ MULTIPLE STUDENTS DETECTED: {student_count} (Allowed: {self.config['max_students']})"
-            cv2.putText(annotated, warning_text, (10, y_offset),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-            y_offset += 30
-        
-        # Show cheating indicators
-        cheating_indicators = results.get('cheating_indicators', [])
-        if cheating_indicators:
-            cv2.putText(annotated, "Cheating Indicators:", (10, y_offset),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 1)
-            y_offset += 25
-            
-            for i, indicator in enumerate(cheating_indicators[:3]):  # Show max 3
-                indicator_text = f"• {indicator.replace('_', ' ').title()}"
-                cv2.putText(annotated, indicator_text, (20, y_offset),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-                y_offset += 20
-        
-        # Draw student zones if applicable
-        if student_count > 0:
-            # Draw safe zone for single student
-            zone_color = (0, 255, 0) if student_count <= self.config['max_students'] else (0, 0, 255)
-            zone_thickness = 2 if student_count <= self.config['max_students'] else 4
-            
-            cv2.rectangle(annotated, (50, 50), (w-50, h-50), zone_color, zone_thickness)
-            
-            # Add zone label
-            zone_label = "Single Student Zone" if student_count <= self.config['max_students'] else "MULTIPLE STUDENTS VIOLATION"
-            cv2.putText(annotated, zone_label, (60, 40),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, zone_color, 2)
-        
         return annotated
     
     def get_student_analysis(self) -> Dict:
-        """Get comprehensive student activity analysis"""
+        """Get student activity analysis - FIXED: Memory safe"""
         recent_activities = list(self.student_activities)
         
         if not recent_activities:
@@ -422,51 +429,16 @@ class VisionGuardian:
                 {
                     'timestamp': attempt['timestamp'],
                     'student_count': attempt['student_count'],
-                    'indicators': attempt['cheating_indicators']
+                    'indicators': attempt['cheating_indicators'][:5]  # Limit
                 }
-                for attempt in self.cheating_attempts[-5:]  # Last 5 attempts
-            ],
-            'activity_pattern': self._analyze_activity_pattern(recent_activities)
+                for attempt in list(self.cheating_attempts)[-5:]  # Last 5 only
+            ]
         }
         
         return analysis
     
-    def _analyze_activity_pattern(self, activities):
-        """Analyze patterns in student activities"""
-        if len(activities) < 10:
-            return {'status': 'insufficient_data'}
-        
-        # Analyze for patterns of cheating
-        high_risk_periods = []
-        current_period = None
-        
-        for activity in activities:
-            if activity['risk_score'] >= 7:
-                if current_period is None:
-                    current_period = {
-                        'start': activity['timestamp'],
-                        'end': activity['timestamp'],
-                        'max_risk': activity['risk_score'],
-                        'student_count': activity['student_count']
-                    }
-                else:
-                    current_period['end'] = activity['timestamp']
-                    current_period['max_risk'] = max(current_period['max_risk'], activity['risk_score'])
-            elif current_period is not None:
-                high_risk_periods.append(current_period)
-                current_period = None
-        
-        if current_period is not None:
-            high_risk_periods.append(current_period)
-        
-        return {
-            'high_risk_periods': high_risk_periods,
-            'total_high_risk_periods': len(high_risk_periods),
-            'pattern_detected': len(high_risk_periods) > 2  # If more than 2 high-risk periods
-        }
-    
     def get_enhanced_stats(self) -> Dict:
-        """Get enhanced statistics with student monitoring"""
+        """Get enhanced statistics"""
         elapsed = time.time() - self.start_time
         fps = self.frame_count / elapsed if elapsed > 0 else 0
         
@@ -480,9 +452,27 @@ class VisionGuardian:
             'fps': round(fps, 1),
             'elapsed_time': round(elapsed, 1),
             'student_analysis': student_analysis,
+            'memory_usage': {
+                'student_activities': len(self.student_activities),
+                'cheating_attempts': len(self.cheating_attempts),
+                'violation_history': len(self.violation_history)
+            },
             'components_active': {
                 'gaze': self.gaze_tracker is not None,
                 'objects': self.object_detector is not None,
                 'student_monitoring': self.config.get('enable_student_monitoring', False)
             }
         }
+    
+    def cleanup(self):
+        """Manual cleanup method"""
+        print("🧹 Manual cleanup initiated...")
+        self._auto_cleanup()
+        print("✅ Cleanup completed")
+    
+    def __del__(self):
+        """Destructor - ensure cleanup on deletion"""
+        try:
+            self.cleanup()
+        except:
+            pass

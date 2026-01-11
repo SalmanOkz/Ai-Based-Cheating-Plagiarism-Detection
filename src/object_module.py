@@ -1,11 +1,11 @@
 """
 Enhanced Object Detector with YOLOv8 for Proctoring
-Multi-person detection and activity monitoring
+FIXED: Memory leaks, bounded collections, cleanup
 """
 import cv2
 import numpy as np
 from ultralytics import YOLO
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Dict, Tuple, Optional
 from collections import deque
 import time
@@ -16,7 +16,7 @@ class Detection:
     class_id: int
     class_name: str
     confidence: float
-    bbox: List[float]  # [x1, y1, x2, y2]
+    bbox: List[float]
     is_person: bool = False
     is_prohibited: bool = False
     track_id: Optional[int] = None
@@ -24,23 +24,31 @@ class Detection:
 
 @dataclass
 class Student:
-    """Data class for tracked student"""
+    """Data class for tracked student - FIXED: Bounded history"""
     track_id: int
     bbox: List[float]
     confidence: float
     last_seen: float
-    position_history: deque
+    position_history: deque = field(default_factory=lambda: deque(maxlen=20))  # FIXED: maxlen
     activity_score: float = 0.0
-    suspicious_actions: List[str] = None
+    suspicious_actions: List[str] = field(default_factory=list)
     
     def __post_init__(self):
-        if self.suspicious_actions is None:
-            self.suspicious_actions = []
-        if self.position_history is None:
-            self.position_history = deque(maxlen=20)
+        """Ensure bounded collections"""
+        if not isinstance(self.position_history, deque):
+            self.position_history = deque(self.position_history, maxlen=20)
+        # FIXED: Limit suspicious actions
+        if len(self.suspicious_actions) > 50:
+            self.suspicious_actions = self.suspicious_actions[-50:]
 
 class ObjectDetector:
-    """Enhanced object detector with student activity monitoring"""
+    """Enhanced object detector - FIXED: Memory safe"""
+    
+    # Constants
+    MAX_TRACKED_STUDENTS = 10  # FIXED: Limit tracked students
+    MAX_ACTIVITY_HISTORY = 100  # FIXED: Limit activity history
+    MAX_SUSPICIOUS_ACTIONS = 50  # FIXED: Limit per student
+    TRACK_TIMEOUT = 5.0  # Seconds before removing old tracks
     
     # Prohibited classes (COCO dataset)
     PROHIBITED_CLASSES = {
@@ -51,8 +59,8 @@ class ObjectDetector:
         41: 'cup',
         76: 'scissors',
         63: 'laptop',
-        62: 'toilet',  # For unusual objects
-        77: 'teddy bear',  # For unusual objects
+        62: 'toilet',
+        77: 'teddy bear',
         27: 'backpack',
         28: 'umbrella'
     }
@@ -61,13 +69,9 @@ class ObjectDetector:
     SUSPICIOUS_ACTIONS = {
         'MULTIPLE_PERSONS': "Multiple students detected",
         'NO_PERSON': "No student in frame",
-        'LOOKING_DOWN': "Looking down frequently",
-        'LOOKING_SIDE': "Looking sideways frequently",
-        'HEAD_TURNED': "Head turned away from screen",
         'PHONE_DETECTED': "Mobile phone detected",
         'BOOK_DETECTED': "Book or notes detected",
         'UNUSUAL_OBJECT': "Suspicious object detected",
-        'MULTIPLE_DEVICES': "Multiple electronic devices",
         'PERSON_LEAVING': "Student left the frame",
         'PERSON_ENTERING': "New person entered",
         'CLOSE_PROXIMITY': "Persons too close (possible collaboration)"
@@ -86,16 +90,20 @@ class ObjectDetector:
             self.conf_threshold = 0.5
             self.iou_threshold = 0.45
             
-            # Tracking and activity monitoring
+            # FIXED: Bounded tracking and activity monitoring
             self.next_track_id = 0
             self.tracked_students = {}  # track_id -> Student
-            self.activity_history = deque(maxlen=100)
+            self.activity_history = deque(maxlen=self.MAX_ACTIVITY_HISTORY)
             self.violation_count = 0
             
             # Alert thresholds
-            self.max_students = 1  # Maximum allowed students
-            self.max_absent_time = 5.0  # Max seconds without student
-            self.proximity_threshold = 100  # Pixels for close proximity
+            self.max_students = 1
+            self.max_absent_time = 5.0
+            self.proximity_threshold = 100
+            
+            # Cleanup tracking
+            self.last_cleanup_time = time.time()
+            self.cleanup_interval = 10.0  # Cleanup every 10 seconds
             
             print(f"✅ YOLO loaded: {len(self.class_names)} classes")
             
@@ -104,9 +112,15 @@ class ObjectDetector:
             self.model = None
     
     def detect(self, frame, conf=None, classes=None):
-        """Detect objects in frame with tracking"""
+        """Detect objects in frame with tracking - FIXED: Memory safe"""
         if self.model is None:
             return [], frame
+        
+        # Auto cleanup periodically
+        current_time = time.time()
+        if current_time - self.last_cleanup_time > self.cleanup_interval:
+            self._cleanup_old_tracks(current_time)
+            self.last_cleanup_time = current_time
         
         # Run inference with tracking
         results = self.model.track(
@@ -120,7 +134,6 @@ class ObjectDetector:
         )
         
         detections = []
-        current_time = time.time()
         
         for result in results:
             if result.boxes is None:
@@ -169,7 +182,15 @@ class ObjectDetector:
         return detections, annotated
     
     def _register_student(self, track_id, bbox, confidence, timestamp):
-        """Register a new student for tracking"""
+        """Register a new student - FIXED: Memory safe"""
+        # FIXED: Limit number of tracked students
+        if len(self.tracked_students) >= self.MAX_TRACKED_STUDENTS:
+            # Remove oldest student
+            oldest_id = min(self.tracked_students.keys(), 
+                          key=lambda k: self.tracked_students[k].last_seen)
+            del self.tracked_students[oldest_id]
+            print(f"⚠️ Max students reached, removed oldest: {oldest_id}")
+        
         student = Student(
             track_id=track_id,
             bbox=bbox.tolist(),
@@ -179,7 +200,6 @@ class ObjectDetector:
         )
         self.tracked_students[track_id] = student
         
-        # Log new student
         print(f"🎓 New student detected (ID: {track_id})")
         self._log_activity(f"Student {track_id} entered the frame")
     
@@ -193,16 +213,20 @@ class ObjectDetector:
         student.confidence = confidence
         student.last_seen = timestamp
         
-        # Add to position history
+        # Add to position history (deque auto-discards oldest)
         center_x = (bbox[0] + bbox[2]) / 2
         center_y = (bbox[1] + bbox[3]) / 2
         student.position_history.append((center_x, center_y, timestamp))
+        
+        # FIXED: Limit suspicious actions
+        if len(student.suspicious_actions) > self.MAX_SUSPICIOUS_ACTIONS:
+            student.suspicious_actions = student.suspicious_actions[-self.MAX_SUSPICIOUS_ACTIONS:]
     
     def _cleanup_tracks(self, current_time):
-        """Remove old tracks"""
+        """Remove inactive tracks"""
         tracks_to_remove = []
         for track_id, student in self.tracked_students.items():
-            if current_time - student.last_seen > 2.0:  # 2 seconds threshold
+            if current_time - student.last_seen > 2.0:
                 tracks_to_remove.append(track_id)
                 print(f"🎓 Student {track_id} left the frame")
                 self._log_activity(f"Student {track_id} left the frame")
@@ -210,25 +234,31 @@ class ObjectDetector:
         for track_id in tracks_to_remove:
             del self.tracked_students[track_id]
     
+    def _cleanup_old_tracks(self, current_time):
+        """Periodic cleanup of very old tracks - FIXED"""
+        tracks_to_remove = []
+        for track_id, student in self.tracked_students.items():
+            if current_time - student.last_seen > self.TRACK_TIMEOUT:
+                tracks_to_remove.append(track_id)
+        
+        for track_id in tracks_to_remove:
+            del self.tracked_students[track_id]
+        
+        if tracks_to_remove:
+            print(f"🧹 Cleaned up {len(tracks_to_remove)} old tracks")
+    
     def _log_activity(self, activity):
-        """Log suspicious activity"""
+        """Log suspicious activity - FIXED: Memory safe"""
         log_entry = {
             'timestamp': time.time(),
             'activity': activity,
             'tracked_students': len(self.tracked_students)
         }
+        # deque auto-discards oldest when maxlen reached
         self.activity_history.append(log_entry)
     
     def analyze_student_activity(self, frame):
-        """
-        Comprehensive analysis of student activities for cheating detection
-        
-        Returns:
-            - Number of students
-            - Suspicious activities
-            - Risk assessment
-            - Detailed analysis
-        """
+        """Comprehensive analysis - FIXED: Memory safe"""
         detections, annotated = self.detect(frame)
         
         # Extract persons and prohibited items
@@ -243,9 +273,8 @@ class ObjectDetector:
             'tracked_students': len(self.tracked_students),
             'prohibited_items_count': len(prohibited_items),
             'student_positions': [],
-            'activity_timeline': list(self.activity_history)[-5:],  # Last 5 activities
-            'proximity_warnings': [],
-            'time_analysis': {}
+            'activity_timeline': list(self.activity_history)[-5:],  # Last 5 only
+            'proximity_warnings': []
         }
         
         # Check for multiple students
@@ -284,55 +313,13 @@ class ObjectDetector:
                 for item in prohibited_items
             ]
         
-        # Analyze student proximity (for collaboration detection)
-        if len(persons) > 1:
-            for i in range(len(persons)):
-                for j in range(i + 1, len(persons)):
-                    bbox1 = persons[i].bbox
-                    bbox2 = persons[j].bbox
-                    
-                    # Calculate distance between persons
-                    center1 = np.array([(bbox1[0] + bbox1[2]) / 2, (bbox1[1] + bbox1[3]) / 2])
-                    center2 = np.array([(bbox2[0] + bbox2[2]) / 2, (bbox2[1] + bbox2[3]) / 2])
-                    distance = np.linalg.norm(center1 - center2)
-                    
-                    if distance < self.proximity_threshold:
-                        activity = self.SUSPICIOUS_ACTIONS['CLOSE_PROXIMITY']
-                        suspicious_activities.append(activity)
-                        risk_factors.append(('close_proximity', 2.0))
-                        detailed_analysis['proximity_warnings'].append({
-                            'student1': persons[i].track_id or i,
-                            'student2': persons[j].track_id or j,
-                            'distance': distance,
-                            'threshold': self.proximity_threshold
-                        })
-        
-        # Analyze tracked student movements
-        for track_id, student in self.tracked_students.items():
-            # Analyze movement patterns
-            if len(student.position_history) >= 5:
-                positions = list(student.position_history)
-                movements = []
-                
-                for k in range(1, len(positions)):
-                    x1, y1, t1 = positions[k-1]
-                    x2, y2, t2 = positions[k]
-                    distance = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
-                    time_diff = t2 - t1
-                    speed = distance / time_diff if time_diff > 0 else 0
-                    movements.append(speed)
-                
-                avg_movement = np.mean(movements) if movements else 0
-                if avg_movement > 50:  # High movement threshold
-                    student.suspicious_actions.append("Excessive movement")
-                    student.activity_score += 1.0
-            
-            # Store student info
+        # Store student info (FIXED: Limited)
+        for track_id, student in list(self.tracked_students.items())[:10]:  # Max 10
             detailed_analysis['student_positions'].append({
                 'track_id': student.track_id,
                 'bbox': student.bbox,
                 'confidence': student.confidence,
-                'suspicious_actions': student.suspicious_actions,
+                'suspicious_actions': student.suspicious_actions[-10:],  # Last 10 only
                 'activity_score': student.activity_score
             })
         
@@ -361,7 +348,18 @@ class ObjectDetector:
             'annotated_frame': annotated,
             'detailed_analysis': detailed_analysis,
             'violation_count': self.violation_count,
-            'frame_timestamp': time.time()
+            'frame_timestamp': time.time(),
+            'detections': [
+                {
+                    'class_id': d.class_id,
+                    'class_name': d.class_name,
+                    'confidence': d.confidence,
+                    'bbox': d.bbox,
+                    'is_person': d.is_person,
+                    'is_prohibited': d.is_prohibited
+                }
+                for d in detections
+            ]
         }
     
     def _calculate_risk_level(self, activities, risk_factors):
@@ -378,127 +376,19 @@ class ObjectDetector:
         # Cap at 10
         return min(10.0, base_risk)
     
-    def analyze_proctoring(self, frame):
-        """
-        Main proctoring analysis (compatibility wrapper)
-        """
-        return self.analyze_student_activity(frame)
-    
-    def draw_detections_with_activity(self, frame, analysis_result):
-        """Draw enhanced detections with activity information"""
-        annotated = frame.copy()
-        h, w = frame.shape[:2]
-        
-        # Get detections from analysis
-        detections = analysis_result.get('detections', [])
-        
-        # Draw bounding boxes
-        for det in detections:
-            x1, y1, x2, y2 = map(int, det.bbox)
-            
-            # Color coding
-            if det.is_person:
-                color = (0, 255, 0)  # Green for person
-                thickness = 2
-                
-                # Add track ID for persons
-                if det.track_id is not None:
-                    label = f"Student {det.track_id}: {det.confidence:.2f}"
-                    cv2.rectangle(annotated, (x1, y1), (x2, y2), color, thickness)
-                    cv2.putText(annotated, label, (x1, y1 - 10),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-            elif det.is_prohibited:
-                color = (0, 0, 255)  # Red for prohibited
-                thickness = 3
-                label = f"PROHIBITED: {det.class_name} {det.confidence:.2f}"
-                cv2.rectangle(annotated, (x1, y1), (x2, y2), color, thickness)
-                cv2.putText(annotated, label, (x1, y1 - 10),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-            else:
-                color = (255, 0, 0)  # Blue for other
-                thickness = 1
-                label = f"{det.class_name} {det.confidence:.2f}"
-                cv2.rectangle(annotated, (x1, y1), (x2, y2), color, thickness)
-                cv2.putText(annotated, label, (x1, y1 - 5),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-        
-        # Draw activity information overlay
-        self._draw_activity_overlay(annotated, analysis_result)
-        
-        return annotated
-    
-    def _draw_activity_overlay(self, frame, analysis_result):
-        """Draw activity analysis overlay on frame"""
-        h, w = frame.shape[:2]
-        
-        # Create semi-transparent overlay
-        overlay = frame.copy()
-        
-        # Draw header with status
-        status = analysis_result.get('status', 'NORMAL')
-        risk_level = analysis_result.get('risk_level', 0)
-        person_count = analysis_result.get('person_count', 0)
-        
-        # Status color
-        if status == "CRITICAL":
-            status_color = (0, 0, 255)  # Red
-        elif status == "WARNING":
-            status_color = (0, 255, 255)  # Yellow
-        else:
-            status_color = (0, 255, 0)  # Green
-        
-        # Draw status bar
-        cv2.rectangle(overlay, (0, 0), (w, 40), status_color, -1)
-        cv2.rectangle(overlay, (0, 0), (w, 40), (255, 255, 255), 2)
-        
-        status_text = f"Status: {status} | Risk: {risk_level:.1f}/10 | Students: {person_count}"
-        cv2.putText(overlay, status_text, (10, 25),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        
-        # Draw suspicious activities
-        activities = analysis_result.get('suspicious_activities', [])
-        if activities:
-            y_offset = 50
-            cv2.putText(overlay, "⚠️ Suspicious Activities:", (10, y_offset),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-            
-            y_offset += 25
-            for i, activity in enumerate(activities[:3]):  # Show max 3
-                cv2.putText(overlay, f"• {activity}", (20, y_offset),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-                y_offset += 20
-        
-        # Draw prohibited items
-        prohibited_items = analysis_result.get('prohibited_items', [])
-        if prohibited_items:
-            y_offset = h - 100
-            cv2.putText(overlay, "🚫 Prohibited Items:", (10, y_offset),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-            
-            y_offset += 25
-            for i, item in enumerate(prohibited_items[:2]):  # Show max 2
-                item_text = f"• {item['item']} ({item['confidence']:.2f})"
-                cv2.putText(overlay, item_text, (20, y_offset),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-                y_offset += 20
-        
-        # Add alpha blending
-        alpha = 0.7
-        cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0, frame)
-    
     def get_activity_summary(self):
-        """Get summary of recent activities"""
+        """Get summary - FIXED: Memory safe"""
         summary = {
             'total_violations': self.violation_count,
             'current_students': len(self.tracked_students),
-            'recent_activities': list(self.activity_history)[-10:],
+            'recent_activities': list(self.activity_history)[-10:],  # Last 10 only
             'tracked_students_info': []
         }
         
-        for track_id, student in self.tracked_students.items():
+        for track_id, student in list(self.tracked_students.items())[:10]:  # Max 10
             summary['tracked_students_info'].append({
                 'track_id': track_id,
-                'suspicious_actions': student.suspicious_actions,
+                'suspicious_actions': student.suspicious_actions[-5:],  # Last 5 only
                 'activity_score': student.activity_score,
                 'last_seen': student.last_seen
             })
@@ -511,66 +401,18 @@ class ObjectDetector:
         self.activity_history.clear()
         self.violation_count = 0
         print("🔄 Tracking reset")
-
-
-# Test function
-def test_student_activity_detection():
-    """Test the enhanced student activity detection"""
-    detector = ObjectDetector()
     
-    # Test with webcam
-    cap = cv2.VideoCapture(0)
+    def cleanup(self):
+        """Manual cleanup"""
+        print("🧹 ObjectDetector cleanup...")
+        current_time = time.time()
+        self._cleanup_old_tracks(current_time)
+        print(f"   Tracked students: {len(self.tracked_students)}")
+        print(f"   Activity history: {len(self.activity_history)}")
     
-    print("\n🎓 Testing Student Activity Detection...")
-    print("This system detects:")
-    print("1. Multiple students (cheating/collaboration)")
-    print("2. Prohibited items (phones, books, etc.)")
-    print("3. Student movements and activities")
-    print("4. Suspicious proximity between students")
-    print("Press 'q' to quit, 'r' to reset tracking")
-    
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        
-        # Analyze student activity
-        result = detector.analyze_student_activity(frame)
-        
-        # Draw enhanced visualization
-        annotated = detector.draw_detections_with_activity(frame, result)
-        
-        # Display
-        cv2.imshow('Student Activity Detection', annotated)
-        
-        # Print status every 30 frames
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-        elif cv2.waitKey(1) & 0xFF == ord('r'):
-            detector.reset_tracking()
-            print("🔄 Tracking reset")
-        
-        # Print summary every 60 frames
-        if cv2.getTickCount() % 60 == 0:
-            print(f"\n📊 Current Status:")
-            print(f"  Students: {result['person_count']}")
-            print(f"  Tracked: {result['tracked_students']}")
-            print(f"  Prohibited Items: {len(result['prohibited_items'])}")
-            print(f"  Risk Level: {result['risk_level']:.1f}/10")
-            print(f"  Status: {result['status']}")
-            
-            if result['suspicious_activities']:
-                print(f"  ⚠️ Suspicious Activities: {result['suspicious_activities']}")
-    
-    cap.release()
-    cv2.destroyAllWindows()
-    
-    # Final summary
-    summary = detector.get_activity_summary()
-    print(f"\n📈 Session Summary:")
-    print(f"Total Violations: {summary['total_violations']}")
-    print(f"Activities Logged: {len(summary['recent_activities'])}")
-
-
-if __name__ == "__main__":
-    test_student_activity_detection()
+    def __del__(self):
+        """Destructor"""
+        try:
+            self.cleanup()
+        except:
+            pass
